@@ -17,10 +17,13 @@ int main(int argc, char* argv[])
 {
 	FILE* f = 0;
 	int result = -1;
+	dsi_es_context ctx;
 	unsigned char metablock[0x20];
 	unsigned char header[0xB4];
 	unsigned char footer[0x440];
 	unsigned char key[16];
+	int reencrypt = 0;
+	
 
 
 	if (argc != 3)
@@ -42,9 +45,11 @@ int main(int argc, char* argv[])
 		goto clean;
 	}
 
+	dsi_es_init(&ctx, key);
+
 
 	// Read and decrypt header
-	f = fopen(argv[1], "rb");
+	f = fopen(argv[1], "rb+");
 
 	if (f == 0)
 		goto clean;
@@ -63,7 +68,7 @@ int main(int argc, char* argv[])
 		goto clean;
 	}
 
-	if (dsi_es_decrypt(header, key, metablock, sizeof(header)) < 0)
+	if (dsi_es_decrypt(&ctx, header, metablock, sizeof(header)) < 0)
 	{
 		fprintf(stderr, "Error decrypting header.\n");
 		goto clean;
@@ -81,7 +86,7 @@ int main(int argc, char* argv[])
 		goto clean;
 	}
 
-	if (dsi_es_decrypt(footer, key, metablock, sizeof(footer)) < 0)
+	if (dsi_es_decrypt(&ctx, footer, metablock, sizeof(footer)) < 0)
 	{
 		fprintf(stderr, "Error decrypting footer.\n");
 		goto clean;
@@ -89,6 +94,21 @@ int main(int argc, char* argv[])
 
 	save("header.bin", header, sizeof(header));
 	save("footer.bin", footer, sizeof(footer));
+
+	if (reencrypt)
+	{
+		dsi_es_encrypt(&ctx, header, metablock, sizeof(footer));
+		fseek(f, 0x4020, SEEK_SET);
+		fwrite(header, 1, sizeof(header), f);
+		fwrite(metablock, 1, sizeof(metablock), f);
+		dsi_es_encrypt(&ctx, footer, metablock, sizeof(footer));
+		fseek(f, 0x40F4, SEEK_SET);
+		fwrite(footer, 1, sizeof(footer), f);
+		fwrite(metablock, 1, sizeof(metablock), f);
+	}
+
+ 
+
 
 	fprintf(stdout, "Done - Have a nice day.\n");
 

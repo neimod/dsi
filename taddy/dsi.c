@@ -1,6 +1,8 @@
 #include "dsi.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 
 void dsi_set_key( dsi_context* ctx,
 				 unsigned char key[16] )
@@ -186,7 +188,6 @@ void dsi_decrypt_ccm( dsi_context* ctx,
 {
 	unsigned char block[16];
 	unsigned char ctr[16];
-	int i;
 
 	while(size > 16)
 	{
@@ -211,8 +212,55 @@ void dsi_decrypt_ccm( dsi_context* ctx,
 	memcpy(output, block, size);
 }
 
-int dsi_es_decrypt( unsigned char* buffer,
-				    unsigned char key[16],
+
+void dsi_encrypt_ccm( dsi_context* ctx, 
+					  unsigned char* input, 
+					  unsigned char* output,
+					  unsigned int size,
+					  unsigned char* mac )
+{
+	unsigned char block[16];
+
+	while(size > 16)
+	{
+		dsi_encrypt_ccm_block(ctx, input, output, mac);
+
+		if (input)
+			input += 16;
+		if (output)
+			output += 16;
+
+		size -= 16;
+	}
+
+	memset(block, 0, 16);
+	memcpy(block, input, size);
+	dsi_encrypt_ccm_block(ctx, block, block, mac);
+	memcpy(output, block, size);
+}
+
+void dsi_es_init( dsi_es_context* ctx,
+				  unsigned char key[16] )
+{
+	memcpy(ctx->key, key, 16);
+	ctx->randomnonce = 1;
+}
+
+void dsi_es_set_nonce( dsi_es_context* ctx,
+					   unsigned char nonce[12] )
+{
+	memcpy(ctx->nonce, nonce, 12);
+	ctx->randomnonce = 0;
+}
+
+void dsi_es_set_random_nonce( dsi_es_context* ctx )
+{
+	ctx->randomnonce = 1;
+}
+							 
+
+int dsi_es_decrypt( dsi_es_context* ctx,
+				    unsigned char* buffer,
 				    unsigned char metablock[32],
 					unsigned int size )
 {
@@ -221,11 +269,9 @@ int dsi_es_decrypt( unsigned char* buffer,
 	unsigned char scratchpad[16];
 	unsigned char chkmac[16];
 	unsigned char genmac[16];
-	dsi_context ctx;
+	dsi_context cryptoctx;
 	unsigned int chksize;
-
 	int i;
-	FILE* f;
 
 
 	memcpy(chkmac, metablock, 16);
@@ -236,20 +282,66 @@ int dsi_es_decrypt( unsigned char* buffer,
 	ctr[14] = 0;
 	ctr[15] = 0;
 
-	dsi_init_ctr(&ctx, key, ctr);
-	dsi_crypt_ctr_block(&ctx, metablock+16, scratchpad);
+	dsi_init_ctr(&cryptoctx, ctx->key, ctr);
+	dsi_crypt_ctr_block(&cryptoctx, metablock+16, scratchpad);
 
 	chksize = (scratchpad[13]<<16) | (scratchpad[14]<<8) | (scratchpad[15]<<0);
+
 	if (scratchpad[0] != 0x3A || chksize != size)
 		return -1;
 
 	memcpy(nonce, metablock + 17, 12);
 
-	dsi_init_ccm(&ctx, key, 16, size, 0, nonce);
-	dsi_decrypt_ccm(&ctx, buffer, buffer, size, genmac);
+	dsi_init_ccm(&cryptoctx, ctx->key, 16, size, 0, nonce);
+	dsi_decrypt_ccm(&cryptoctx, buffer, buffer, size, genmac);
 
 	if (memcmp(genmac, chkmac, 16) != 0)
 		return -1;
 
 	return 0;
+}
+
+
+void dsi_es_encrypt( dsi_es_context* ctx,
+				     unsigned char* buffer,
+				     unsigned char metablock[32],
+				 	 unsigned int size )
+{
+	int i;
+	unsigned char nonce[12];
+	unsigned char mac[16];
+	unsigned char ctr[16];
+	unsigned char scratchpad[16];
+	dsi_context cryptoctx;
+
+	if (ctx->randomnonce)
+	{
+		srand( time(0) );
+
+		for(i=0; i<12; i++)
+			nonce[i] = rand();
+	}
+	else
+	{
+		memcpy(nonce, ctx->nonce, 12);
+	}
+
+	dsi_init_ccm(&cryptoctx, ctx->key, 16, size, 0, nonce);
+	dsi_encrypt_ccm(&cryptoctx, buffer, buffer, size, mac);
+
+	memset(scratchpad, 0, 16);
+	scratchpad[0] = 0x3A;
+	scratchpad[13] = size >> 16;
+	scratchpad[14] = size >> 8;
+	scratchpad[15] = size >> 0;
+
+	memset(ctr, 0, 16);
+	memcpy(ctr+1, nonce, 12);
+
+	dsi_init_ctr(&cryptoctx, ctx->key, ctr);
+	dsi_crypt_ctr_block(&cryptoctx, scratchpad, metablock+16);
+	memcpy(metablock+17, nonce, 12);
+
+	memcpy(metablock, mac, 16);
+
 }

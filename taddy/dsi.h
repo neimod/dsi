@@ -14,6 +14,15 @@ typedef struct
 }
 dsi_context;
 
+typedef struct
+{
+	unsigned char key[16];
+	unsigned char nonce[12];
+	int randomnonce;
+} dsi_es_context;
+
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -59,8 +68,27 @@ void		dsi_decrypt_ccm( dsi_context* ctx,
 							 unsigned int size,
 							 unsigned char* mac );
 
-int			dsi_es_decrypt( unsigned char* buffer,
-						    unsigned char key[16],
+void		dsi_encrypt_ccm( dsi_context* ctx, 
+							 unsigned char* input, 
+							 unsigned char* output,
+							 unsigned int size,
+							 unsigned char* mac );
+
+void		dsi_es_init( dsi_es_context* ctx,
+						 unsigned char key[16] );
+
+void		dsi_es_set_nonce( dsi_es_context* ctx,
+							  unsigned char nonce[12] );
+
+void		dsi_es_set_random_nonce( dsi_es_context* ctx );
+
+int			dsi_es_decrypt( dsi_es_context* ctx,
+						    unsigned char* buffer,
+						    unsigned char metablock[32],
+							unsigned int size );
+
+void		dsi_es_encrypt( dsi_es_context* ctx,
+						    unsigned char* buffer,
 						    unsigned char metablock[32],
 							unsigned int size );
 
