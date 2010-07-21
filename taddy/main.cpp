@@ -25,6 +25,7 @@ int main(int argc, char* argv[])
 	int reencrypt = 0;
 	
 
+	fprintf(stdout, "taddy tool by neimod\n");
 
 	if (argc != 3)
 	{
