@@ -98,7 +98,7 @@ int main(int argc, char* argv[])
 
 	if (reencrypt)
 	{
-		dsi_es_encrypt(&ctx, header, metablock, sizeof(footer));
+		dsi_es_encrypt(&ctx, header, metablock, sizeof(header));
 		fseek(f, 0x4020, SEEK_SET);
 		fwrite(header, 1, sizeof(header), f);
 		fwrite(metablock, 1, sizeof(metablock), f);
