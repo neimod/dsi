@@ -271,7 +271,6 @@ int dsi_es_decrypt( dsi_es_context* ctx,
 	unsigned char genmac[16];
 	dsi_context cryptoctx;
 	unsigned int chksize;
-	int i;
 
 
 	memcpy(chkmac, metablock, 16);
