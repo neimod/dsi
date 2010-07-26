@@ -22,9 +22,12 @@ typedef struct tna4_t
 	uint8_t hwinfo_n[0x10];
 	uint32_t titleid_2;
 	uint32_t titleid_1;
-	uint32_t content_length[11];
+	int32_t tmd_elength;
+	int32_t content_elength[8];
+	int32_t savedata_elength;
+	int32_t bannersav_elength;
 	uint32_t content_id[8];
-	uint32_t savefile_size;
+	uint32_t savedata_length;
 	uint8_t reserved[0x3c];
 } tna4_t;
 
@@ -43,11 +46,12 @@ typedef struct footer_t
 	uint8_t tw_cert[0x180];
 } footer_t;
 
-#define CI_TMD 0
-#define CI_CONTENT_FIRST 1
-#define CI_CONTENT_LAST 8
-#define CI_SAVEDATA 9
-#define CI_BANNERSAV 10
+//#define CI_TMD 0
+#define CI_CONTENT_FIRST 0
+#define CI_CONTENT_LAST 7
+#define CI_CONTENT_COUNT 8
+//#define CI_SAVEDATA 9
+//#define CI_BANNERSAV 10
 
 #define EOFF_BANNER 0
 #define ESIZE_BANNER 0x4020
@@ -62,7 +66,7 @@ int decrypt_to_buffer(uint8_t *key, uint8_t *src, uint8_t *dst, uint32_t enc_siz
 {
 	uint32_t bytes_to_dec = 0;
 	uint32_t total_dec_bytes = 0;
-	int rv;
+
 	dsi_es_context dec;
 	dsi_es_init(&dec, key);
 	while(enc_size > 0)
@@ -104,7 +108,7 @@ int decrypt_to_buffer(uint8_t *key, uint8_t *src, uint8_t *dst, uint32_t enc_siz
 	return 0;
 }
 
-int save_section(const char *filebase, const char *extension, char *buffer, int len)
+int save_section(const char *filebase, const char *extension, uint8_t *buffer, int len)
 {
 	char filename[512];
 
@@ -173,7 +177,7 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	char key[0x10];
+	uint8_t key[0x10];
 	rv = get_key("sd_key", key, sizeof(key));
 	if(rv != 0)
 	{
@@ -192,7 +196,7 @@ int main(int argc, char *argv[])
 	struct stat st;
 	fstat(input_fd, &st);
 
-	char *mapped_file = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, input_fd, 0);
+	uint8_t *mapped_file = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, input_fd, 0);
 
 	if(mapped_file == MAP_FAILED)
 	{
@@ -235,31 +239,31 @@ int main(int argc, char *argv[])
 	printf("titleid:  %08x-%08x\n", le32toh(tna4->titleid_1),
 		le32toh(tna4->titleid_2));
 	printf("contents:\n");
-	if(le32toh(tna4->content_length[CI_TMD]) != 0)
+	if(le32toh(tna4->tmd_elength) != 0)
 	{
 		printf(" tmd: 0x%08x ebytes\n",
-			le32toh(tna4->content_length[CI_TMD]));
+			le32toh(tna4->tmd_elength));
 	}
-	for(i=CI_CONTENT_FIRST; i<=CI_CONTENT_LAST; i++)
+	for(i=0; i<CI_CONTENT_COUNT; i++)
 	{
-		if(le32toh(tna4->content_length[i]) != 0)
+		if(le32toh(tna4->content_elength[i]) != 0)
 		{
 			printf(" content(index:0x%02hhx, id:0x%08x): 0x%08x ebytes\n",
-				i-CI_CONTENT_FIRST,
+				i,
 				le32toh(tna4->content_id[i]),
-				le32toh(tna4->content_length[i]));
+				le32toh(tna4->content_elength[i]));
 		}
 	}
-	if(le32toh(tna4->content_length[CI_SAVEDATA]) != 0)
+	if(le32toh(tna4->savedata_elength) != 0)
 	{
 		printf(" savedata: 0x%08x ebytes [0x%08x bytes]\n",
-			le32toh(tna4->content_length[CI_SAVEDATA]),
-			le32toh(tna4->savefile_size));
+			le32toh(tna4->savedata_elength),
+			le32toh(tna4->savedata_length));
 	}
-	if(le32toh(tna4->content_length[CI_BANNERSAV]) != 0)
+	if(le32toh(tna4->bannersav_elength) != 0)
 	{
 		printf(" bannersav: 0x%08x ebytes\n",
-			le32toh(tna4->content_length[CI_BANNERSAV]));
+			le32toh(tna4->bannersav_elength));
 	}
 
 	printf("decrypting footer\n");
@@ -344,21 +348,17 @@ int main(int argc, char *argv[])
 	}
 
 // skip tmd and contents - different key
-	uint32_t offset_to_savedata = EOFF_TMD + 0x1e4 + 0x20;
-	for(i=CI_CONTENT_FIRST; i<=CI_CONTENT_LAST; i++)
+	int32_t offset_to_savedata = EOFF_TMD + le32toh(tna4->tmd_elength);
+	for(i=0; i<CI_CONTENT_COUNT; i++)
 	{
-		offset_to_savedata += le32toh(tna4->content_length[i]);
-		if(le32toh(tna4->content_length[i]) != 0)
-		{
-			offset_to_savedata += 0x24;
-		}
+		offset_to_savedata += le32toh(tna4->content_elength[i]);
 	}
 
-	if(le32toh(tna4->content_length[CI_SAVEDATA]) != 0)
+	if(le32toh(tna4->savedata_elength) != 0)
 	{
 		printf("decrypting savedata\n");
 
-		uint32_t savedata_length = le32toh(tna4->savefile_size);
+		uint32_t savedata_length = le32toh(tna4->savedata_length);
 		uint8_t *savedata_buffer = malloc(savedata_length);
 
 		if(savedata_buffer == NULL)
@@ -372,7 +372,7 @@ int main(int argc, char *argv[])
 	
 		uint32_t old_savedata_length = savedata_length;
 		rv = decrypt_to_buffer(key, mapped_file + offset_to_savedata,
-			savedata_buffer, le32toh(tna4->content_length[CI_SAVEDATA]),
+			savedata_buffer, le32toh(tna4->savedata_elength),
 			&savedata_length); 
 		if(rv < 0)
 		{
@@ -413,17 +413,17 @@ int main(int argc, char *argv[])
 		free(savedata_buffer);
 	}
 
-	if(offset_to_savedata + le32toh(tna4->content_length[CI_SAVEDATA]) +
-		le32toh(tna4->content_length[CI_BANNERSAV]) > st.st_size)
+	if(offset_to_savedata + le32toh(tna4->savedata_elength) +
+		le32toh(tna4->bannersav_elength) > st.st_size)
 	{
 		printf("used up too many bytes ?!\n");
 	}
-	else if(offset_to_savedata + le32toh(tna4->content_length[CI_SAVEDATA]) +
-		le32toh(tna4->content_length[CI_BANNERSAV]) != st.st_size)
+	else if(offset_to_savedata + le32toh(tna4->savedata_elength) +
+		le32toh(tna4->bannersav_elength) != st.st_size)
 	{
-		printf("unused trailer of 0x%08x bytes\n", st.st_size -
-			(offset_to_savedata + le32toh(tna4->content_length[CI_SAVEDATA]) +
-			le32toh(tna4->content_length[CI_BANNERSAV])));
+		printf("unused trailer of %ld bytes\n", st.st_size -
+			(offset_to_savedata + le32toh(tna4->savedata_elength) +
+			le32toh(tna4->bannersav_elength)));
 	}
 
 	munmap(mapped_file, st.st_size);
