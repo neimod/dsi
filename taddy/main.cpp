@@ -111,7 +111,7 @@ int main(int argc, char* argv[])
  
 
 
-	fprintf(stdout, "Done - Have a nice day.\n");
+	fprintf(stdout, "Done - Have a very nice day.\n");
 
 clean:
 	if (f)
