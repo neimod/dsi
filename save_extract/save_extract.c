@@ -60,6 +60,8 @@ typedef struct footer_t
 #define EOFF_FOOTER (EOFF_TNA4 + ESIZE_TNA4)
 #define ESIZE_FOOTER 0x460
 #define EOFF_TMD (EOFF_FOOTER + ESIZE_FOOTER)
+#define ESIZE_BANNERSAV 0x4020
+#define SIZE_BANNERSAV 0x4000
 
 uint8_t buffer[0x20020];
 int decrypt_to_buffer(uint8_t *key, uint8_t *src, uint8_t *dst, uint32_t enc_size, uint32_t *dec_size)
@@ -411,6 +413,57 @@ int main(int argc, char *argv[])
 			printf("BAD!\n");
 		}
 		free(savedata_buffer);
+	}
+	if(le32toh(tna4->bannersav_elength) == ESIZE_BANNERSAV)
+	{
+		printf("decrypting bannersav\n");
+
+		uint8_t *bannersav_buffer = malloc(SIZE_BANNERSAV);
+
+		if(bannersav_buffer == NULL)
+		{
+			printf("error allocating buffer for bannersav\n");
+			munmap(mapped_file, st.st_size);
+			close(input_fd);
+			return 1;
+		}
+
+	
+		uint32_t bannersav_length = SIZE_BANNERSAV;
+		rv = decrypt_to_buffer(key, mapped_file + offset_to_savedata + le32toh(tna4->savedata_elength),
+			bannersav_buffer, le32toh(tna4->bannersav_elength),
+			&bannersav_length); 
+		if(rv < 0)
+		{
+			printf("error decrypting bannersav: %d\n", rv);
+			munmap(mapped_file, st.st_size);
+			close(input_fd);
+			return 1;
+		}
+	
+		printf("checking bannersav sha1... ");
+		SHA1(bannersav_buffer, bannersav_length, temp_hash);
+		if(memcmp(temp_hash, footer->bannersav_hash, sizeof(sha1_hash))==0)
+		{
+			printf("GOOD!\n");
+			rv = save_section(argv[2], "bannersav", bannersav_buffer, bannersav_length);
+			if(rv < 0)
+			{
+				printf("error saving bannersav: %d\n", rv);
+				munmap(mapped_file, st.st_size);
+				close(input_fd);
+				return 1;
+			}
+		}
+		else
+		{
+			printf("BAD!\n");
+		}
+		free(bannersav_buffer);
+	}
+	else
+	{
+		printf("unexpected bannersav elength: 0x%08x\n", le32toh(tna4->bannersav_elength));
 	}
 
 	if(offset_to_savedata + le32toh(tna4->savedata_elength) +

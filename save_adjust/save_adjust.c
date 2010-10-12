@@ -12,6 +12,7 @@
 #include <taddy/dsi.h>
 #include <endian.h>
 #include <openssl/sha.h>
+#include <assert.h>
 #include "ec.h"
 
 typedef struct tna4_t
@@ -714,6 +715,9 @@ int main(int argc, char *argv[])
 		
 	}
 
+	assert(mapped_file + curr_offset + le32toh(tna4->tmd_elength) <= mapped_file + st.st_size);
+	assert(mapped_file + curr_offset >= mapped_file);
+
 	memcpy(tmd_buffer, mapped_file + curr_offset, le32toh(tna4->tmd_elength));
 
 	curr_offset += le32toh(tna4->tmd_elength);
@@ -734,6 +738,8 @@ int main(int argc, char *argv[])
 				return 1;
 			}
 
+			assert(mapped_file + curr_offset + le32toh(tna4->content_elength[i]) <= mapped_file + st.st_size);
+			assert(mapped_file + curr_offset >= mapped_file);
 			memcpy(content_buffer[i], mapped_file + curr_offset,
 				le32toh(tna4->content_elength[i]));
 			curr_offset += le32toh(tna4->content_elength[i]);
@@ -742,6 +748,7 @@ int main(int argc, char *argv[])
 
 	if(le32toh(tna4->savedata_elength) != 0)
 	{
+			printf("[%10.10s] {%08x,%08x,%08x,%08x}\n", "savedata", (uint32_t)mapped_file, curr_offset, (uint32_t)st.st_size, le32toh(tna4->savedata_elength));
 		savedata_buffer = malloc(le32toh(tna4->savedata_length));
 		if(savedata_buffer == NULL)
 		{
@@ -768,7 +775,6 @@ int main(int argc, char *argv[])
 				SHA1(savedata_buffer, le32toh(tna4->savedata_length),
 					footer->savedata_hash);
 				need_to_resign = 1;
-				curr_offset += tna4->savedata_elength;
 			}
 		}
 	
@@ -822,6 +828,8 @@ int main(int argc, char *argv[])
 			return -1;
 		}
 
+		assert(mapped_file + curr_offset + le32toh(tna4->bannersav_elength) <= mapped_file + st.st_size);
+		assert(mapped_file + curr_offset >= mapped_file);
 		memcpy(bannersav_buffer, mapped_file + curr_offset,
 			le32toh(tna4->bannersav_elength));
 
@@ -830,7 +838,7 @@ int main(int argc, char *argv[])
 
 	if(curr_offset > st.st_size)
 	{
-		printf("used up too many bytes ?!\n");
+		printf("used up too many bytes ?! at offset 0x%08x should be at 0x%08x\n", (uint32_t)curr_offset, (uint32_t)st.st_size);
 	}
 	else if(curr_offset < st.st_size)
 	{
