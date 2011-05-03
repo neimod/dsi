@@ -31,7 +31,6 @@ int main(int argc, char* argv[])
 	mmc_init(&ctx, f);
 
 
-	//for(i=0; i<100000; i++)
 	while(!feof(f))
 	{
 		unsigned char c = fgetc(f);

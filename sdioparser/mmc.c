@@ -30,6 +30,11 @@ void mmc_init(mmc_context* ctx, FILE* f)
 void mmc_destroy(mmc_context* ctx)
 {
 	bitreg_destroy(&ctx->cmd);
+	bitreg_destroy(&ctx->dat0);
+	bitreg_destroy(&ctx->dat1);
+	bitreg_destroy(&ctx->dat2);
+	bitreg_destroy(&ctx->dat3);
+	bitreg_destroy(&ctx->dat);
 }
 
 unsigned short mmc_crc16_update(unsigned short crc, unsigned int in)
