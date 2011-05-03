@@ -52,9 +52,10 @@ int main(int argc, char* argv[])
 				mmc_get_cmd52_content(&ctx, &cmd52);
 
 				if (cmd52.rw)
-					fprintf(stdout, "IO_RW_DIRECT   WRITE FNR=%d ADDR=%08x", cmd52.fnr, cmd52.address);
+					fprintf(stdout, "IO_RW_DIRECT   WRITE FNR=%d ADDR=%08x RAW=%d DATA=%02X", cmd52.fnr, cmd52.address, cmd52.raw, cmd52.data);
 				else
-					fprintf(stdout, "IO_RW_DIRECT   READ  FNR=%d ADDR=%08x RAW=%d DATA=%02X", cmd52.fnr, cmd52.address, cmd52.raw, cmd52.data);
+					fprintf(stdout, "IO_RW_DIRECT   READ FNR=%d ADDR=%08x", cmd52.fnr, cmd52.address);
+					
 			}
 			else if (cmd == 53)
 			{
