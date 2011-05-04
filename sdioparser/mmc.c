@@ -3,9 +3,9 @@
 #include "mmc.h"
 
 
-void mmc_init(mmc_context* ctx, FILE* f)
+int mmc_init(mmc_context* ctx, const char* fname)
 {
-	ctx->f = f;
+	ctx->f = fopen(fname, "rb");
 	ctx->cmdrecv = 0;
 	ctx->cmdresprecv = 0;
 	ctx->cmdskipbits = 0;
@@ -16,6 +16,9 @@ void mmc_init(mmc_context* ctx, FILE* f)
 	ctx->datblocks = 0;
 	ctx->datbytes = 0;
 	ctx->datavailable = 0;
+	ctx->address = 0;
+	ctx->fnr = 0;
+	ctx->rw = 0;
 
 
 	bitreg_init(&ctx->cmd);
@@ -25,6 +28,8 @@ void mmc_init(mmc_context* ctx, FILE* f)
 	bitreg_init(&ctx->dat3);
 	bitreg_init(&ctx->dat);
 	bitreg_resize(&ctx->cmd, 48);
+
+	return ctx->f != 0;
 }
 
 void mmc_destroy(mmc_context* ctx)
@@ -35,6 +40,11 @@ void mmc_destroy(mmc_context* ctx)
 	bitreg_destroy(&ctx->dat2);
 	bitreg_destroy(&ctx->dat3);
 	bitreg_destroy(&ctx->dat);
+
+	if (ctx->f)
+	{
+		fclose(ctx->f);
+	}
 }
 
 unsigned short mmc_crc16_update(unsigned short crc, unsigned int in)
@@ -47,16 +57,31 @@ unsigned short mmc_crc16_update(unsigned short crc, unsigned int in)
 	return crc;
 }
 
-void mmc_process(mmc_context* ctx, unsigned char data)
+int mmc_process(mmc_context* ctx)
 {
-	unsigned int cmdbit = data & 1;
-	unsigned int dat0 = (data >> 1) & 1;
-	unsigned int dat1 = (data >> 2) & 1;
-	unsigned int dat2 = (data >> 3) & 1;
-	unsigned int dat3 = (data >> 4) & 1;
 	unsigned char* cmddata = ctx->cmd.data;
+	unsigned int cmdbit;
+	unsigned int dat0;
+	unsigned int dat1;
+	unsigned int dat2;
+	unsigned int dat3;
+	unsigned char data;
 	unsigned char checkcrc, gotcrc;
 	int i;
+
+	if (feof(ctx->f))
+		return 0;
+
+	data = fgetc(ctx->f);
+
+	if (feof(ctx->f))
+		return 0;
+
+	cmdbit = data & 1;
+	dat0 = (data >> 1) & 1;
+	dat1 = (data >> 2) & 1;
+	dat2 = (data >> 3) & 1;
+	dat3 = (data >> 4) & 1;
 
 	ctx->cmdrecv = 0;
 	ctx->cmdresprecv = 0;
@@ -170,11 +195,11 @@ void mmc_process(mmc_context* ctx, unsigned char data)
 			if (checkcrc0 != gotcrc0 || checkcrc1 != gotcrc1 || checkcrc2 != gotcrc2 || checkcrc3 != gotcrc3)
 			{
 				bitreg_resize(&ctx->dat, 0);
-				printf("CRC mismatch %d!\n", ftell(ctx->f)/2);
-				printf("%04X vs %04X\n", checkcrc0, gotcrc0);
-				printf("%04X vs %04X\n", checkcrc1, gotcrc1);
-				printf("%04X vs %04X\n", checkcrc2, gotcrc2);
-				printf("%04X vs %04X\n", checkcrc3, gotcrc3);
+				fprintf(stderr, "CRC mismatch %d!\n", ftell(ctx->f)/2);
+				fprintf(stderr, "%04X vs %04X\n", checkcrc0, gotcrc0);
+				fprintf(stderr, "%04X vs %04X\n", checkcrc1, gotcrc1);
+				fprintf(stderr, "%04X vs %04X\n", checkcrc2, gotcrc2);
+				fprintf(stderr, "%04X vs %04X\n", checkcrc3, gotcrc3);
 			}
 		}
 		else if (ctx->buswidth == 0)
@@ -217,6 +242,8 @@ void mmc_process(mmc_context* ctx, unsigned char data)
 			ctx->datavailable = 0;
 		}
 	}
+
+	return 1;
 }
 
 void mmc_process_cmd(mmc_context* ctx)
@@ -235,20 +262,24 @@ void mmc_process_cmd(mmc_context* ctx)
 
 		mmc_get_cmd52_content(ctx, &cmd52);
 
+		ctx->address = cmd52.address;
+		ctx->fnr = cmd52.fnr;
+		ctx->rw = cmd52.rw;
+
 		if (cmd52.fnr == 0 && cmd52.address == 7 && cmd52.rw)
 		{
 			ctx->buswidth = cmd52.data & 3;
-			printf("Set buswidth to %d\n", ctx->buswidth);
+			//printf("Set buswidth to %d\n", ctx->buswidth);
 		}
 		else if (cmd52.fnr == 0 && cmd52.address == 0x110 && cmd52.rw)
 		{
 			ctx->blocksizefbr1 = (ctx->blocksizefbr1 & ~0xFF) | cmd52.data;
-			printf("Set FBR1 blocksize to %d\n", ctx->blocksizefbr1);
+			//printf("Set FBR1 blocksize to %d\n", ctx->blocksizefbr1);
 		}
 		else if (cmd52.fnr == 0 && cmd52.address == 0x111 && cmd52.rw)
 		{
 			ctx->blocksizefbr1 = (ctx->blocksizefbr1 & ~0xFF00) | (cmd52.data<<8);
-			printf("Set FBR1 blocksize to %d\n", ctx->blocksizefbr1);
+			//printf("Set FBR1 blocksize to %d\n", ctx->blocksizefbr1);
 		}
 	}
 	else if (cmd == 53)
@@ -256,6 +287,10 @@ void mmc_process_cmd(mmc_context* ctx)
 		mmc_cmd53 cmd53;
 
 		mmc_get_cmd53_content(ctx, &cmd53);
+
+		ctx->address = cmd53.address;
+		ctx->fnr = cmd53.fnr;
+		ctx->rw = cmd53.rw;
 
 		if (cmd53.fnr == 1)
 		{
@@ -384,6 +419,20 @@ int mmc_is_dat_ready(mmc_context* ctx)
 	return ctx->datavailable;
 }
 
+unsigned int mmc_get_address(mmc_context* ctx)
+{
+	return ctx->address;
+}
+
+unsigned int mmc_get_fnr(mmc_context* ctx)
+{
+	return ctx->fnr;
+}
+
+unsigned int mmc_get_rw(mmc_context* ctx)
+{
+	return ctx->rw;
+}
 
 unsigned char mmc_get_cmd(mmc_context* ctx)
 {

@@ -22,6 +22,9 @@ typedef struct
 	unsigned int datblocks;
 	unsigned int datbytes;
 	unsigned int datavailable;
+	unsigned int address;
+	unsigned int fnr;
+	unsigned int rw;
 } mmc_context;
 
 typedef struct
@@ -45,9 +48,9 @@ typedef struct
 	unsigned int size;
 } mmc_cmd53;
 
-void mmc_init(mmc_context* ctx, FILE* f);
+int mmc_init(mmc_context* ctx, const char* fname);
 void mmc_destroy(mmc_context* ctx);
-void mmc_process(mmc_context* ctx, unsigned char data);
+int mmc_process(mmc_context* ctx);
 unsigned char mmc_crc7(const unsigned char* in, unsigned int length);
 unsigned short mmc_crc16_update(unsigned short crc, unsigned int in);
 void mmc_dump(const char* indent, const void* data, unsigned int size);
@@ -62,6 +65,8 @@ void mmc_process_cmd(mmc_context* ctx);
 unsigned int mmc_get_dat_size(mmc_context* ctx);
 unsigned char* mmc_get_dat_content(mmc_context* ctx);
 void mmc_dump_rawdat(mmc_context* ctx);
-
+unsigned int mmc_get_address(mmc_context* ctx);
+unsigned int mmc_get_fnr(mmc_context* ctx);
+unsigned int mmc_get_rw(mmc_context* ctx);
 
 #endif // _MMC_H_

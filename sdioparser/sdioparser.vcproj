@@ -41,6 +41,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
+				AdditionalIncludeDirectories="windows\include;windows"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -60,7 +61,9 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="wpcap.lib"
 				LinkIncremental="2"
+				AdditionalLibraryDirectories="windows\lib"
 				GenerateDebugInformation="true"
 				SubSystem="1"
 				TargetMachine="1"
@@ -114,6 +117,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
+				AdditionalIncludeDirectories="windows\include;windows"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
@@ -132,7 +136,9 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="wpcap.lib"
 				LinkIncremental="1"
+				AdditionalLibraryDirectories="windows\lib"
 				GenerateDebugInformation="true"
 				SubSystem="1"
 				OptimizeReferences="2"
@@ -175,6 +181,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\windows\getopt.c"
+				>
+			</File>
+			<File
+				RelativePath=".\windows\getopt1.c"
+				>
+			</File>
+			<File
 				RelativePath=".\main.c"
 				>
 			</File>
@@ -190,6 +204,10 @@
 			>
 			<File
 				RelativePath=".\bitreg.h"
+				>
+			</File>
+			<File
+				RelativePath=".\windows\getopt.h"
 				>
 			</File>
 			<File
