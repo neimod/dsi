@@ -20,7 +20,65 @@ static void usage(const char *argv0)
    exit(1);
 }
 
-static void do_pretty_print(mmc_context* ctx)
+static const char* decode_wmi_key_type(unsigned char type)
+{
+	switch(type)
+	{
+		case 1: return "NONE";
+		case 2: return "WEP";
+		case 3: return "TKIP";
+		case 4: return "AES";
+		default: return "";
+	}
+}
+
+static const char* decode_wmi_key_usage(unsigned char type)
+{
+	switch(type)
+	{
+		case 0: return "Pairwise";
+		case 1: return "Group";
+		case 2: return "Tx";
+		default: return "";
+	}
+}
+
+static void do_decode_wmi_add_cipher_key(unsigned char* data, unsigned int len)
+{
+	unsigned int i;
+
+
+	fprintf(stdout, " >> WMI_ADD_CIPHER_KEY:\n");
+	fprintf(stdout, " >>  Key index: %d\n", data[0]);
+	fprintf(stdout, " >>  Key type: %d\n", decode_wmi_key_type(data[1]));
+	fprintf(stdout, " >>  Key usage: %d\n", decode_wmi_key_usage(data[2]));
+	fprintf(stdout, " >>  Key replay counter: ");
+	for(i=0; i<8; i++)
+		fprintf(stdout, "%02X", data[4+i]);
+	fprintf(stdout, "\n");
+	fprintf(stdout, " >>  Key length: %d\n", data[3]);
+	fprintf(stdout, " >>  Key data: ");
+	for(i=0; i<data[3]; i++)
+		fprintf(stdout,"%02X", data[12+i]);
+	fprintf(stdout, "\n");
+	fprintf(stdout, " >>  Key control: %d\n", data[44]);
+}
+
+
+static void do_decode_wmi_ready_event(unsigned char* data, unsigned int len)
+{
+	unsigned int i;
+
+
+	fprintf(stdout, " >> WMI_READY_EVENT:\n");
+	fprintf(stdout, " >>  MAC: ");
+	for(i=0; i<6; i++)
+		fprintf(stdout, "%02X", data[i]);
+	fprintf(stdout, "\n");
+	fprintf(stdout, " >>  Phy capability: %d\n", data[6]);
+}
+
+static void do_decode(mmc_context* ctx)
 {
 	unsigned char cmd;
 	unsigned int content;
@@ -77,8 +135,32 @@ static void do_pretty_print(mmc_context* ctx)
 		{
 			unsigned int size = mmc_get_dat_size(ctx);
 			unsigned char* data = mmc_get_dat_content(ctx);
+			unsigned int address = mmc_get_address(ctx);
+			unsigned int fnr = mmc_get_fnr(ctx);
 
-			mmc_dump(" >>", data, size);
+			//mmc_dump(" >>", data, size);
+
+			if (fnr == 1 && address >= 0x800 && address < 0x1000 && size > 6 && data[0] == 0x01)
+			{
+				unsigned short len = data[1] | (data[2]<<8);
+				unsigned short id = data[6] | (data[7]<<8);
+
+				switch(id)
+				{
+					case 22: do_decode_wmi_add_cipher_key(data+8, len-2); break;
+
+					case 4097: do_decode_wmi_ready_event(data+8, len-2); break;
+						
+					default:
+						fprintf(stdout, "Got WMI id %d\n", id);
+						mmc_dump(" >>", data, size);
+					break;
+				}
+			}
+			else
+			{
+				mmc_dump(" >>", data, size);
+			}
 		}
 	}
 }
@@ -204,7 +286,7 @@ int main(int argc, char* argv[])
 		break;
 
 		case Decode:
-			do_pretty_print(&ctx);
+			do_decode(&ctx);
 		break;
 	}
 
