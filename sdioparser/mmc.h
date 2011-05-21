@@ -44,7 +44,7 @@ typedef struct
 	unsigned char bmode;
 	unsigned char opcode;
 	unsigned int address;
-	unsigned char count;
+	unsigned int count;
 	unsigned int size;
 } mmc_cmd53;
 
